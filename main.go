@@ -122,6 +122,9 @@ func generateFilename(url, outputDir, prefix string) string {
 	parts := strings.Split(url, "/")
 	if len(parts) > 0 {
 		lastPart := parts[len(parts)-1]
+		if queryIndex := strings.Index(lastPart, "?"); queryIndex != -1 {
+			lastPart = lastPart[:queryIndex]
+		}
 		if strings.HasSuffix(lastPart, ".json") {
 			baseName := strings.TrimSuffix(lastPart, ".json")
 			if prefix != "" {
@@ -130,7 +133,7 @@ func generateFilename(url, outputDir, prefix string) string {
 			return filepath.Join(outputDir, baseName+".pdf")
 		}
 	}
-	// Fallback: hash the URL
+	// Fallback case
 	h := md5.New()
 	io.WriteString(h, url)
 	return filepath.Join(outputDir, fmt.Sprintf("%x.pdf", h.Sum(nil)))
