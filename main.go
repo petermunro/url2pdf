@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,24 +175,4 @@ func getURLsFromIndexPage(indexURL string, queryParam string) ([]string, error) 
 	}
 
 	return links, nil
-}
-
-func getBaseURL(indexURL string) string {
-	u, err := url.Parse(indexURL)
-	if err != nil {
-		return indexURL
-	}
-	return fmt.Sprintf("%s://%s", u.Scheme, u.Host)
-}
-
-func resolveURL(base, relative string) string {
-	baseURL, err := url.Parse(base)
-	if err != nil {
-		return relative
-	}
-	relativeURL, err := url.Parse(relative)
-	if err != nil {
-		return relative
-	}
-	return baseURL.ResolveReference(relativeURL).String()
 }
