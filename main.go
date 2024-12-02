@@ -25,6 +25,7 @@ func main() {
 	scale := flag.Float64("scale", 1.0, "Scale of the webpage rendering (between 0.1 and 2.0)")
 	indexURL := flag.String("index", "", "URL of the directory index page")
 	prefix := flag.String("prefix", "", "Prefix to add to output filenames")
+	queryParam := flag.String("query", "", "Query parameter to append to URLs (e.g. 'print=true')")
 	flag.Parse()
 
 	if *urls == "" && *indexURL == "" {
@@ -44,7 +45,7 @@ func main() {
 	var urlList []string
 	if *indexURL != "" {
 		var err error
-		urlList, err = getURLsFromIndexPage(*indexURL)
+		urlList, err = getURLsFromIndexPage(*indexURL, *queryParam)
 		if err != nil {
 			log.Fatalf("Failed to process index page: %v", err)
 		}
@@ -135,7 +136,7 @@ func generateFilename(url, outputDir, prefix string) string {
 	return filepath.Join(outputDir, fmt.Sprintf("%x.pdf", h.Sum(nil)))
 }
 
-func getURLsFromIndexPage(indexURL string) ([]string, error) {
+func getURLsFromIndexPage(indexURL string, queryParam string) ([]string, error) {
 	fmt.Printf("Loading page: %s\n", indexURL)
 
 	ctx, cancel := chromedp.NewContext(context.Background())
@@ -151,6 +152,16 @@ func getURLsFromIndexPage(indexURL string) ([]string, error) {
 				.map(a => a.href)
 		`, &links),
 	)
+
+	if queryParam != "" {
+		for i, link := range links {
+			if strings.Contains(link, "?") {
+				links[i] = link + "&" + queryParam
+			} else {
+				links[i] = link + "?" + queryParam
+			}
+		}
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract links: %v", err)
