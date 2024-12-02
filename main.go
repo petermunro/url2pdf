@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,10 +23,12 @@ func main() {
 	outputDir := flag.String("output", "pdfs", "Directory to save PDFs")
 	urls := flag.String("urls", "", "Comma-separated list of URLs to convert")
 	scale := flag.Float64("scale", 1.0, "Scale of the webpage rendering (between 0.1 and 2.0)")
+	indexURL := flag.String("index", "", "URL of the directory index page")
+	prefix := flag.String("prefix", "", "Prefix to add to output filenames")
 	flag.Parse()
 
-	if *urls == "" {
-		log.Fatal("Please provide at least one URL using the -urls flag")
+	if *urls == "" && *indexURL == "" {
+		log.Fatal("Please provide either -urls or -index flag")
 	}
 
 	// Validate scale
@@ -36,8 +41,16 @@ func main() {
 		log.Fatalf("Failed to create output directory: %v", err)
 	}
 
-	// Split URLs into slice
-	urlList := strings.Split(*urls, ",")
+	var urlList []string
+	if *indexURL != "" {
+		var err error
+		urlList, err = getURLsFromIndexPage(*indexURL)
+		if err != nil {
+			log.Fatalf("Failed to process index page: %v", err)
+		}
+	} else {
+		urlList = strings.Split(*urls, ",")
+	}
 
 	// Create a wait group to track goroutines
 	var wg sync.WaitGroup
@@ -59,7 +72,7 @@ func main() {
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			if err := generatePDF(browserCtx, url, *outputDir, *scale); err != nil {
+			if err := generatePDF(browserCtx, url, *outputDir, *scale, *prefix); err != nil {
 				log.Printf("Error processing %s: %v", url, err)
 			}
 		}(strings.TrimSpace(url))
@@ -68,13 +81,13 @@ func main() {
 	wg.Wait()
 }
 
-func generatePDF(ctx context.Context, url, outputDir string, scale float64) error {
+func generatePDF(ctx context.Context, url, outputDir string, scale float64, prefix string) error {
 	// Create a new tab for each URL
 	tabCtx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
 
 	// Generate filename from URL
-	filename := generateFilename(url, outputDir)
+	filename := generateFilename(url, outputDir, prefix)
 
 	var pdf []byte
 	if err := chromedp.Run(tabCtx,
@@ -104,20 +117,69 @@ func generatePDF(ctx context.Context, url, outputDir string, scale float64) erro
 	return nil
 }
 
-func generateFilename(url, outputDir string) string {
-	// Remove protocol prefix and replace special characters
-	name := strings.TrimPrefix(url, "http://")
-	name = strings.TrimPrefix(name, "https://")
-	name = strings.ReplaceAll(name, "/", "_")
-	name = strings.ReplaceAll(name, ":", "_")
-	name = strings.ReplaceAll(name, "?", "_")
-	name = strings.ReplaceAll(name, "&", "_")
-	name = strings.ReplaceAll(name, "=", "_")
+func generateFilename(url, outputDir, prefix string) string {
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		lastPart := parts[len(parts)-1]
+		if strings.HasSuffix(lastPart, ".json") {
+			baseName := strings.TrimSuffix(lastPart, ".json")
+			if prefix != "" {
+				baseName = prefix + "-" + baseName
+			}
+			return filepath.Join(outputDir, baseName+".pdf")
+		}
+	}
+	// Fallback: hash the URL
+	h := md5.New()
+	io.WriteString(h, url)
+	return filepath.Join(outputDir, fmt.Sprintf("%x.pdf", h.Sum(nil)))
+}
 
-	// Ensure filename ends with .pdf
-	if !strings.HasSuffix(name, ".pdf") {
-		name += ".pdf"
+func getURLsFromIndexPage(indexURL string) ([]string, error) {
+	fmt.Printf("Loading page: %s\n", indexURL)
+
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	var links []string
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(indexURL),
+		chromedp.Sleep(2*time.Second), // Wait for React to render
+		chromedp.Evaluate(`
+			Array.from(document.querySelectorAll('a'))
+				.filter(a => a.href.endsWith('.json'))
+				.map(a => a.href)
+		`, &links),
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract links: %v", err)
 	}
 
-	return filepath.Join(outputDir, name)
+	fmt.Printf("Found %d JSON URLs\n", len(links))
+	for _, link := range links {
+		fmt.Printf("  %s\n", link)
+	}
+
+	return links, nil
+}
+
+func getBaseURL(indexURL string) string {
+	u, err := url.Parse(indexURL)
+	if err != nil {
+		return indexURL
+	}
+	return fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+}
+
+func resolveURL(base, relative string) string {
+	baseURL, err := url.Parse(base)
+	if err != nil {
+		return relative
+	}
+	relativeURL, err := url.Parse(relative)
+	if err != nil {
+		return relative
+	}
+	return baseURL.ResolveReference(relativeURL).String()
 }
