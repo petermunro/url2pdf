@@ -19,10 +19,16 @@ func main() {
 	// Define command line flags
 	outputDir := flag.String("output", "pdfs", "Directory to save PDFs")
 	urls := flag.String("urls", "", "Comma-separated list of URLs to convert")
+	scale := flag.Float64("scale", 1.0, "Scale of the webpage rendering (between 0.1 and 2.0)")
 	flag.Parse()
 
 	if *urls == "" {
 		log.Fatal("Please provide at least one URL using the -urls flag")
+	}
+
+	// Validate scale
+	if *scale < 0.1 || *scale > 2.0 {
+		log.Fatal("Scale must be between 0.1 and 2.0")
 	}
 
 	// Create output directory if it doesn't exist
@@ -53,7 +59,7 @@ func main() {
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			if err := generatePDF(browserCtx, url, *outputDir); err != nil {
+			if err := generatePDF(browserCtx, url, *outputDir, *scale); err != nil {
 				log.Printf("Error processing %s: %v", url, err)
 			}
 		}(strings.TrimSpace(url))
@@ -62,7 +68,7 @@ func main() {
 	wg.Wait()
 }
 
-func generatePDF(ctx context.Context, url, outputDir string) error {
+func generatePDF(ctx context.Context, url, outputDir string, scale float64) error {
 	// Create a new tab for each URL
 	tabCtx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
@@ -81,6 +87,7 @@ func generatePDF(ctx context.Context, url, outputDir string) error {
 			pdf, _, err = page.PrintToPDF().
 				WithPrintBackground(true).
 				WithLandscape(true).
+				WithScale(scale).
 				Do(ctx)
 			return err
 		}),
