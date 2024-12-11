@@ -7,7 +7,6 @@ toolchain go1.23.3
 require (
 	github.com/chromedp/cdproto v0.0.0-20241202193831-ec840381567d
 	github.com/chromedp/chromedp v0.11.2
-	golang.org/x/net v0.31.0
 )
 
 require (

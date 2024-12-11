@@ -49,7 +49,19 @@ func main() {
 			log.Fatalf("Failed to process index page: %v", err)
 		}
 	} else {
-		urlList = strings.Split(*urls, ",")
+		// Process URLs from -urls flag
+		if *urls != "" {
+			urlList = strings.Split(*urls, ",")
+			if *queryParam != "" {
+				for i, url := range urlList {
+					if strings.Contains(url, "?") {
+						urlList[i] = url + "&" + *queryParam
+					} else {
+						urlList[i] = url + "?" + *queryParam
+					}
+				}
+			}
+		}
 	}
 
 	// Create a wait group to track goroutines
