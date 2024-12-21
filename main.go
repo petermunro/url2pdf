@@ -25,6 +25,7 @@ func main() {
 	indexURL := flag.String("index", "", "URL of the directory index page")
 	prefix := flag.String("prefix", "", "Prefix to add to output filenames")
 	queryParam := flag.String("query", "", "Query parameter to append to URLs (e.g. 'print=true')")
+	portrait := flag.Bool("portrait", false, "Print in portrait mode (default is landscape)")
 	flag.Parse()
 
 	if *urls == "" && *indexURL == "" {
@@ -84,7 +85,7 @@ func main() {
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			if err := generatePDF(browserCtx, url, *outputDir, *scale, *prefix); err != nil {
+			if err := generatePDF(browserCtx, url, *outputDir, *scale, *prefix, *portrait); err != nil {
 				log.Printf("Error processing %s: %v", url, err)
 			}
 		}(strings.TrimSpace(url))
@@ -93,7 +94,7 @@ func main() {
 	wg.Wait()
 }
 
-func generatePDF(ctx context.Context, url, outputDir string, scale float64, prefix string) error {
+func generatePDF(ctx context.Context, url, outputDir string, scale float64, prefix string, portrait bool) error {
 	// Create a new tab for each URL
 	tabCtx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
@@ -111,7 +112,7 @@ func generatePDF(ctx context.Context, url, outputDir string, scale float64, pref
 			var err error
 			pdf, _, err = page.PrintToPDF().
 				WithPrintBackground(true).
-				WithLandscape(true).
+				WithLandscape(!portrait).
 				WithScale(scale).
 				Do(ctx)
 			return err
