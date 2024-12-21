@@ -54,6 +54,7 @@ go run main.go [flags]
 - `-output`: Directory to save PDFs (default: "pdfs")
 - `-scale`: Scale of the webpage rendering (between 0.1 and 2.0, default: 1.0)
 - `-prefix`: Prefix to add to output filenames
+- `-portrait`: Print in portrait mode (default is landscape)
 - `-query`: Query parameter to append to URLs (e.g. 'print=true')
 
 ### Examples
